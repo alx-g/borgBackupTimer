@@ -1,0 +1,6 @@
+/venv
+/.idea
+/launch.sh
+config.ini
+__pycache__
+
