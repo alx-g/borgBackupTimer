@@ -366,7 +366,7 @@ def main():
 
     # Setup MainApp and read config values
     MainApp(qapp=qapp,
-            check_interval=cnf.getint('main', 'check_interval', fallback=30),
+            check_interval=cnf.getint('main', 'check_interval', fallback=500),
             bbackups=bbackups,
             environments=BEnv.from_config(cnf),
             graphical_editor=shlex.split(cnf.get('main', 'graphical_editor', fallback='gedit')))

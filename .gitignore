@@ -1,7 +1,7 @@
 /venv
 /.idea
 /launch.sh
-config.ini
+*.ini
 __pycache__
 *.log
 
