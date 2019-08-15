@@ -1,10 +1,12 @@
-import subprocess
-import os
-import time
-from funcs import *
 import datetime
 import logging
+import os
+import re
 import shlex
+import subprocess
+import time
+
+from funcs import check_host
 
 
 class BBackup:
@@ -20,7 +22,7 @@ class BBackup:
             borg_passphrase,
             backup_directories,
             borg_prune_args,
-            borg_list_args=[],
+            borg_list_args=(),
             borg_stats=True,
             borg_archive_name_template="%Y-%m-%d_%H-%M-%S",
             borg_rsh='ssh',
@@ -80,7 +82,7 @@ class BBackup:
         stdout_ = stdout.decode()
         stderr_ = stderr.decode()
         if stdout_ or stderr_:
-            logging.info('BORG create output:\n'+stdout_+stderr_)
+            logging.info('BORG create output:\n' + stdout_ + stderr_)
         if p.returncode == 0:
             params = ['borg', 'prune'] + (['--stats'] if self.borg_stats else []) + self.borg_prune_args
 
@@ -97,7 +99,7 @@ class BBackup:
             stdout_ = stdout.decode()
             stderr_ = stderr.decode()
             if stdout_ or stderr_:
-                logging.info('BORG prune output:\n'+stdout_+stderr_)
+                logging.info('BORG prune output:\n' + stdout_ + stderr_)
             self.store_timestamp(now)
             return True
         else:
@@ -140,3 +142,28 @@ class BBackup:
     def store_timestamp(self, timestamp):
         with open(self.timestamp_file, 'w') as f:
             f.write(str(int(timestamp)))
+
+    @staticmethod
+    def from_config(cnf):
+        bbackups = []
+        for s in cnf.sections():
+            if re.fullmatch(r'backup_\w+', s):
+                logging.info('> Registered backup \'%s\'', s)
+                bbackups.append(BBackup(
+                    name=s,
+                    timestamp_file=cnf.get(s, 'timestamp_file'),
+                    interval=cnf.getint(s, 'interval'),
+                    host=cnf.get(s, 'host'),
+                    borg_repo=cnf.get(s, 'borg_repo'),
+                    borg_rsh=cnf.get(s, 'borg_rsh', fallback='ssh'),
+                    borg_archive_name_template=cnf.get(s, 'borg_archive_name_template', fallback='%Y-%m-%d_%H-%M-%S'),
+                    borg_passphrase=cnf.get(s, 'borg_passphrase'),
+                    backup_directories=shlex.split(cnf.get(s, 'backup_directories')),
+                    borg_prune_args=shlex.split(cnf.get(s, 'borg_prune_args')),
+                    borg_args=shlex.split(cnf.get(s, 'borg_args', fallback='')),
+                    borg_stats=cnf.getboolean(s, 'borg_stats', fallback=True),
+                    borg_list_args=shlex.split(cnf.get(s, 'borg_list_args', fallback='')),
+                    restrict_to_environments=cnf.getboolean(s, 'restrict_to_environments', fallback=False),
+                    allowed_environments=shlex.split(cnf.get(s, 'allowed_environments', fallback=''))
+                ))
+        return bbackups

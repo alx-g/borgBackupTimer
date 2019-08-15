@@ -3,4 +3,5 @@
 /launch.sh
 config.ini
 __pycache__
+*.log
 

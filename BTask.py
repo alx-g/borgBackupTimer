@@ -14,7 +14,7 @@ class BTask(QRunnable):
         self.kwargs = kwargs
         self.signals = BTaskSignals()
 
-    @pyqtSlot()
+    @pyqtSlot(name='borgBackupTimer_BTask')
     def run(self):
         ret = False
         try:
