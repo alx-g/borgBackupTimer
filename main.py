@@ -362,7 +362,8 @@ def main():
     bbackups = BBackup.from_config(cnf)
 
     if not bbackups:
-        logging.warning('No backups registered. There will be no action.')
+        logging.error('No backups registered. There will be no action.')
+        exit(255)
 
     # Setup MainApp and read config values
     MainApp(qapp=qapp,
