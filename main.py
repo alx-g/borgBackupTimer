@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication
 from BBackup import BBackup
 from BEnv import BEnv
 from BTask import BTask
+from ParseTerminalCommand import parse_terminal_command
 
 
 class MainApp:
@@ -26,13 +27,21 @@ class MainApp:
             bbackups,
             check_interval,
             environments,
-            graphical_editor
+            graphical_editor,
+            log_path,
+            terminal_command
     ):
         # Reference to main PyQt.QApplication
         self.qapp = qapp
 
         # Config-defined editor to use when showing borg command output
         self.graphical_editor = graphical_editor
+
+        # Store path to log file
+        self.log_path = log_path
+
+        # Save prepared function for terminal command generation
+        self.terminal_command = terminal_command
 
         # Load all tray icon files
         self.icon = QIcon("icons/icon.png")
@@ -55,6 +64,8 @@ class MainApp:
         self.micon_exit = QIcon("icons/micon_exit.png")
         self.micon_info = QIcon("icons/micon_info.png")
         self.micon_run = QIcon("icons/micon_run.png")
+        self.micon_log = QIcon("icons/micon_log.png")
+        self.micon_console = QIcon("icons/micon_console.png")
 
         # Keep track of borg backups
         self.bbackups = deque(bbackups)
@@ -82,16 +93,30 @@ class MainApp:
 
         self.borg_list_actions = {}
         self.borg_create_actions = {}
+        self.borg_console_actions = {}
         for bbackup in self.bbackups:
             self.menu.addSeparator()
             self.borg_list_actions[bbackup.name] = QAction('List "%s"' % bbackup.name, self.qapp)
-            self.borg_create_actions[bbackup.name] = QAction('Run "%s" now' % bbackup.name, self.qapp)
             self.borg_list_actions[bbackup.name].triggered.connect(partial(self.click_borg_list, bbackup))
-            self.borg_create_actions[bbackup.name].triggered.connect(partial(self.click_borg_create, bbackup))
             self.borg_list_actions[bbackup.name].setIcon(self.micon_info)
-            self.borg_create_actions[bbackup.name].setIcon(self.micon_run)
             self.menu.addAction(self.borg_list_actions[bbackup.name])
+
+            self.borg_create_actions[bbackup.name] = QAction('Run "%s" now' % bbackup.name, self.qapp)
+            self.borg_create_actions[bbackup.name].triggered.connect(partial(self.click_borg_create, bbackup))
+            self.borg_create_actions[bbackup.name].setIcon(self.micon_run)
             self.menu.addAction(self.borg_create_actions[bbackup.name])
+
+            if self.terminal_command is not None:
+                self.borg_console_actions[bbackup.name] = QAction('Open console for "%s"' % bbackup.name, self.qapp)
+                self.borg_console_actions[bbackup.name].triggered.connect(partial(self.click_borg_console, bbackup))
+                self.borg_console_actions[bbackup.name].setIcon(self.micon_console)
+                self.menu.addAction(self.borg_console_actions[bbackup.name])
+
+        self.menu.addSeparator()
+        self.log_action = QAction('Show log')
+        self.log_action.triggered.connect(self.click_log)
+        self.log_action.setIcon(self.micon_log)
+        self.menu.addAction(self.log_action)
 
         self.tray.setContextMenu(self.menu)
 
@@ -290,6 +315,11 @@ class MainApp:
         self.busy = False
         self.status['user'] = 0
 
+    def click_log(self):
+        # The user requested to see the current log file
+        params = self.graphical_editor + [self.log_path]
+        subprocess.Popen(params, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     def click_borg_create(self, bbackup):
         # The user requested to run this bbackup now
         if not self.busy:
@@ -304,6 +334,24 @@ class MainApp:
             task.signals.done.connect(self.call_host_check_done)
             task.signals.fail.connect(self.call_host_check_fail)
             self.thread_pool.start(task)
+
+    def click_borg_console(self, bbackup):
+        env_cmds = r'echo -e "\033]2;%s console\007"' % bbackup.name + "; "
+        env_cmds += 'export BORG_REPO=' + shlex.quote(bbackup.borg_repo) + "; "
+        env_cmds += 'export BORG_PASSPHRASE=' + shlex.quote(bbackup.borg_passphrase) + "; "
+        env_cmds += 'export BORG_RSH=' + shlex.quote(bbackup.borg_rsh) + "; "
+        env_cmds += "echo " + shlex.quote(80*'#') + "; "
+        env_cmds += "echo " + shlex.quote('# This is a custom console for "%s"' % bbackup.name) + "; "
+        env_cmds += "echo " + shlex.quote(80*'#') + "; "
+        env_cmds += "echo " + shlex.quote('Repository settings are loaded as environment variables, so you can just use'
+                                          ' borg without specifying the repository, the passphrase or the rsh option if'
+                                          ' one is needed for your backup server.') + "; "
+        env_cmds += "echo ''"
+        cmd = self.terminal_command(env_cmds)
+        logging.info("User requested borg console for \"%s\"." % bbackup.name)
+        logging.info("Running %s" % cmd.replace(bbackup.borg_passphrase, '***'))
+
+        subprocess.Popen(shlex.split(cmd), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     @staticmethod
     def click_exit():
@@ -351,6 +399,9 @@ def main():
 
     logging.info('Started BorgBackupTimer.')
 
+    # Parse terminal_command
+    terminal_command = parse_terminal_command(cnf.get('main', 'terminal_command', fallback=''))
+
     # cwd to script dir
     os.chdir(script_dir)
     logging.debug('Changed directory to script dir "%s"' % (script_dir,))
@@ -370,7 +421,9 @@ def main():
             check_interval=cnf.getint('main', 'check_interval', fallback=500),
             bbackups=bbackups,
             environments=BEnv.from_config(cnf),
-            graphical_editor=shlex.split(cnf.get('main', 'graphical_editor', fallback='gedit')))
+            graphical_editor=shlex.split(cnf.get('main', 'graphical_editor', fallback='gedit')),
+            log_path=log_path,
+            terminal_command=terminal_command)
 
     # Run event loop
     sys.exit(qapp.exec_())

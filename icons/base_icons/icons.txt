@@ -1,0 +1,17 @@
+The following listed images belong to the "Blueberry Basic" iconset from Icojam.
+http://www.iconarchive.com/show/blueberry-basic-icons-by-icojam.html
+This iconset is Public Domain.
+
+attention.png
+error.png
+ok.png
+refresh.png
+
+
+The following listed images belong to the "Onebit Icons" iconset from Icojam.
+http://www.iconarchive.com/show/onebit-icons-by-icojam.html
+This iconset is Public Domain.
+
+icon.png
+log.png
+console.png
