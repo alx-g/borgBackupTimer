@@ -155,8 +155,16 @@ class MainApp:
         if self.busy:
             for a in self.borg_list_actions.values():
                 a.setEnabled(False)
+            for a in self.borg_create_actions.values():
+                a.setEnabled(False)
+            for a in self.borg_console_actions.values():
+                a.setEnabled(False)
         else:
             for a in self.borg_list_actions.values():
+                a.setEnabled(True)
+            for a in self.borg_create_actions.values():
+                a.setEnabled(True)
+            for a in self.borg_console_actions.values():
                 a.setEnabled(True)
 
         # Depending on values in status, set icon
